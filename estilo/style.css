@@ -37,7 +37,7 @@ a.externo::after {
 
 
 header {
-    background-image: linear-gradient(to bottom, var(--cor1), var(--cor5));
+    background-image: linear-gradient( to bottom, var(--cor1), var(--cor5));
     min-height: 150px;/*determina a altura da caixa*/
     text-align: center;
     padding-top: 40px;
