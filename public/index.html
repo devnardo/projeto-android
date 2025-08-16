@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Sistema de Pagamentos Simples</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		body { font-family: Inter, system-ui, -apple-system, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+		.container { max-width: 900px; margin: 0 auto; padding: 24px; }
+		h1 { font-size: 28px; margin: 0 0 16px; }
+		.card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+		label { display: block; margin: 8px 0 4px; }
+		input, select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid #30353f; background: #0b1220; color: #e2e8f0; }
+		button { background: #3b82f6; color: white; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; }
+		button:hover { background: #2563eb; }
+		.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+		.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+		.badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+		.badge.succeeded { background:#065f46; }
+		.badge.requires { background:#92400e; }
+	</style>
+</head>
+<body>
+	<div class="container">
+		<h1>Sistema de Pagamentos</h1>
+		<div class="grid">
+			<div class="card">
+				<h3>Criar pagamento</h3>
+				<label>Descrição</label>
+				<input id="desc" placeholder="Assinatura mensal" />
+				<label>Valor (R$)</label>
+				<input id="amount" type="number" step="0.01" min="0" placeholder="19.90" />
+				<label>Moeda</label>
+				<select id="currency">
+					<option value="BRL">BRL</option>
+					<option value="USD">USD</option>
+				</select>
+				<div style="margin-top:12px">
+					<button id="create">Criar intenção</button>
+				</div>
+				<pre id="createOut" class="mono"></pre>
+			</div>
+			<div class="card">
+				<h3>Confirmar pagamento</h3>
+				<label>ID do pagamento</label>
+				<input id="payId" placeholder="pay_xxx" />
+				<div style="margin-top:12px">
+					<button id="confirm">Confirmar</button>
+				</div>
+				<pre id="confirmOut" class="mono"></pre>
+			</div>
+		</div>
+		<div class="card">
+			<div style="display:flex; align-items:center; justify-content:space-between;">
+				<h3>Pagamentos recentes</h3>
+				<button id="refresh">Atualizar</button>
+			</div>
+			<table style="width:100%; border-collapse: collapse;">
+				<thead>
+					<tr>
+						<th style="text-align:left; padding:8px; border-bottom:1px solid #1f2937">ID</th>
+						<th style="text-align:left; padding:8px; border-bottom:1px solid #1f2937">Descrição</th>
+						<th style="text-align:left; padding:8px; border-bottom:1px solid #1f2937">Valor</th>
+						<th style="text-align:left; padding:8px; border-bottom:1px solid #1f2937">Status</th>
+						<th style="text-align:left; padding:8px; border-bottom:1px solid #1f2937">Criado</th>
+					</tr>
+				</thead>
+				<tbody id="rows"></tbody>
+			</table>
+		</div>
+	</div>
+	<script>
+		async function createPayment() {
+			const description = document.getElementById('desc').value || 'Compra';
+			const amount = parseFloat(document.getElementById('amount').value || '0');
+			const currency = document.getElementById('currency').value || 'BRL';
+			const out = document.getElementById('createOut');
+			out.textContent = 'Processando...';
+			try {
+				const res = await fetch('/api/payments', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ description, amount, currency })
+				});
+				const data = await res.json();
+				out.textContent = JSON.stringify(data, null, 2);
+				if (data.id) document.getElementById('payId').value = data.id;
+				refresh();
+			} catch (e) {
+				out.textContent = 'Erro ao criar pagamento';
+			}
+		}
+		async function confirmPayment() {
+			const id = document.getElementById('payId').value;
+			const out = document.getElementById('confirmOut');
+			out.textContent = 'Confirmando...';
+			try {
+				const res = await fetch(`/api/payments/${id}/confirm`, { method: 'POST' });
+				const data = await res.json();
+				out.textContent = JSON.stringify(data, null, 2);
+				refresh();
+			} catch (e) {
+				out.textContent = 'Erro ao confirmar pagamento';
+			}
+		}
+		async function refresh() {
+			const tbody = document.getElementById('rows');
+			tbody.innerHTML = '<tr><td style="padding:8px">Carregando...</td></tr>';
+			const res = await fetch('/api/payments');
+			const data = await res.json();
+			tbody.innerHTML = '';
+			for (const p of data) {
+				const tr = document.createElement('tr');
+				tr.innerHTML = `
+					<td style="padding:8px" class="mono">${p.id}</td>
+					<td style="padding:8px">${p.description || '-'}</td>
+					<td style="padding:8px">${(p.amount_cents/100).toFixed(2)} ${p.currency}</td>
+					<td style="padding:8px"><span class="badge ${p.status==='succeeded'?'succeeded':'requires'}">${p.status}</span></td>
+					<td style="padding:8px">${new Date(p.created_at).toLocaleString()}</td>
+				`;
+				tbody.appendChild(tr);
+			}
+		}
+		document.getElementById('create').addEventListener('click', createPayment);
+		document.getElementById('confirm').addEventListener('click', confirmPayment);
+		document.getElementById('refresh').addEventListener('click', refresh);
+		refresh();
+	</script>
+</body>
+</html>
